@@ -9,6 +9,7 @@ import { readOpenCodeCredentials } from '../../opencode/auth.js';
 import { buildResult } from '../utils/index.js';
 
 import * as claude from './claude/index.js';
+import * as alibabaTokenPlan from './alibaba-token-plan.js';
 import * as clinePass from './cline-pass.js';
 import * as codex from './codex.js';
 import * as copilot from './copilot.js';
@@ -34,6 +35,7 @@ import * as ollamaCloud from './ollama-cloud.js';
 import * as wafer from './wafer.js';
 import * as opencodeGo from './opencode-go.js';
 import * as xai from './xai.js';
+import * as xiaomiTokenPlanAms from './xiaomi-token-plan-ams.js';
 
 const registry = {
   claude: {
@@ -41,6 +43,12 @@ const registry = {
     providerName: claude.providerName,
     isConfigured: claude.isConfigured,
     fetchQuota: claude.fetchQuota
+  },
+  'alibaba-token-plan': {
+    providerId: alibabaTokenPlan.providerId,
+    providerName: alibabaTokenPlan.providerName,
+    isConfigured: alibabaTokenPlan.isConfigured,
+    fetchQuota: alibabaTokenPlan.fetchQuota
   },
   'cline-pass': {
     providerId: clinePass.providerId,
@@ -191,6 +199,12 @@ const registry = {
     providerName: xai.providerName,
     isConfigured: xai.isConfigured,
     fetchQuota: xai.fetchQuota
+  },
+  'xiaomi-token-plan-ams': {
+    providerId: xiaomiTokenPlanAms.providerId,
+    providerName: xiaomiTokenPlanAms.providerName,
+    isConfigured: xiaomiTokenPlanAms.isConfigured,
+    fetchQuota: xiaomiTokenPlanAms.fetchQuota
   }
 };
 

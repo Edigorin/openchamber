@@ -31,4 +31,6 @@ export const QUOTA_PROVIDERS: QuotaProviderMeta[] = [
   { id: 'kilo', name: 'Kilo Code' },
   { id: 'zenmux', name: 'ZenMux' },
   { id: 'xai', name: 'xAI' },
+  { id: 'alibaba-token-plan', name: 'Alibaba Model Studio Token Plan' },
+  { id: 'xiaomi-token-plan-ams', name: 'Xiaomi MiMo Token Plan' },
 ];

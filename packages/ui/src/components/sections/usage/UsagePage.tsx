@@ -90,6 +90,8 @@ export const UsagePage: React.FC = () => {
   const credentialProviderId = selectedProviderId === 'exe-dev'
     || selectedProviderId === 'cursor'
     || selectedProviderId === 'zenmux'
+    || selectedProviderId === 'alibaba-token-plan'
+    || selectedProviderId === 'xiaomi-token-plan-ams'
     ? selectedProviderId
     : null;
   const hasCredentialsForm = credentialProviderId !== null;

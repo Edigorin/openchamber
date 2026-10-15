@@ -25,7 +25,9 @@ export type QuotaProviderId =
   | 'neuralwatt'
   | 'kilo'
   | 'zenmux'
-  | 'xai';
+  | 'xai'
+  | 'alibaba-token-plan'
+  | 'xiaomi-token-plan-ams';
 
 export interface UsageWindowGiftReset {
   recordId: number;

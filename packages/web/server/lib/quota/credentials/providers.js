@@ -16,6 +16,14 @@ export const normalizers = {
     const platformApiKey = clean(value?.platformApiKey);
     return platformApiKey ? { platformApiKey } : null;
   },
+  'alibaba-token-plan': (value) => {
+    const consoleToken = clean(value?.consoleToken);
+    return consoleToken ? { consoleToken } : null;
+  },
+  'xiaomi-token-plan-ams': (value) => {
+    const cookie = clean(value?.cookie);
+    return cookie ? { cookie } : null;
+  },
 };
 
 export const readManagedCredential = (providerId) => {

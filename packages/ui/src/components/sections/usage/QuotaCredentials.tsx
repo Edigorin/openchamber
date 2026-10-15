@@ -5,7 +5,7 @@ import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 
-type QuotaCredentialProviderId = 'exe-dev' | 'cursor' | 'zenmux';
+type QuotaCredentialProviderId = 'exe-dev' | 'cursor' | 'zenmux' | 'alibaba-token-plan' | 'xiaomi-token-plan-ams';
 
 type Status = { configured: boolean; secretMasked?: string };
 type CredentialPayload = {
@@ -13,6 +13,8 @@ type CredentialPayload = {
   accessToken?: string;
   refreshToken?: string;
   platformApiKey?: string;
+  consoleToken?: string;
+  cookie?: string;
 };
 const EXE_DEV_TOKEN_COMMAND = `ssh exe.dev "ssh-key generate-api-key --label=openchamber --exp=30d --cmds='billing credits usage'"`;
 
@@ -50,10 +52,18 @@ export const QuotaCredentials: React.FC<{ providerId: QuotaCredentialProviderId;
       {providerId === 'zenmux' && (
         <p className="typography-meta text-muted-foreground">{t('settings.providers.page.quotaCredentials.zenmuxInstructions')}</p>
       )}
+      {providerId === 'alibaba-token-plan' && (
+        <p className="typography-meta text-muted-foreground">{t('settings.providers.page.quotaCredentials.alibabaInstructions')}</p>
+      )}
+      {providerId === 'xiaomi-token-plan-ams' && (
+        <p className="typography-meta text-muted-foreground">{t('settings.providers.page.quotaCredentials.xiaomiInstructions')}</p>
+      )}
       {providerId === 'exe-dev' && field('usageToken', t('settings.providers.page.quotaCredentials.usageToken'), t('settings.providers.page.quotaCredentials.tokenPlaceholder'))}
       {providerId === 'zenmux' && field('platformApiKey', t('settings.providers.page.quotaCredentials.platformApiKey'), t('settings.providers.page.quotaCredentials.tokenPlaceholder'))}
       {providerId === 'cursor' && field('accessToken', t('settings.providers.page.quotaCredentials.accessToken'), t('settings.providers.page.quotaCredentials.tokenPlaceholder'))}
       {providerId === 'cursor' && field('refreshToken', t('settings.providers.page.quotaCredentials.refreshToken'), t('settings.providers.page.quotaCredentials.tokenPlaceholder'))}
+      {providerId === 'alibaba-token-plan' && field('consoleToken', t('settings.providers.page.quotaCredentials.consoleToken'), t('settings.providers.page.quotaCredentials.tokenPlaceholder'))}
+      {providerId === 'xiaomi-token-plan-ams' && field('cookie', t('settings.providers.page.quotaCredentials.cookie'), t('settings.providers.page.quotaCredentials.tokenPlaceholder'))}
       <div className="flex flex-wrap gap-2">
         <Button size="xs" disabled={busy} onClick={() => request(route, 'PUT', values)}>{status?.configured ? t('settings.providers.page.openCodeGo.replace') : t('settings.providers.page.openCodeGo.save')}</Button>
         {status?.configured && <Button variant="outline" size="xs" disabled={busy} onClick={() => request(`${route}/validate`, 'POST')}>{t('settings.providers.page.openCodeGo.validate')}</Button>}
