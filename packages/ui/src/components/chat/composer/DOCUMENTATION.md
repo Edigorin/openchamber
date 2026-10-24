@@ -46,6 +46,16 @@ oldest pending form and counts the rest in its header. The BTW sheet keeps
 the inline `FormCard` for its child session's forms; both render a field
 through `FormFieldControl`.
 
+When a turn dies with its question still open, both surfaces show the
+question again as a recovered card, with a notice that the turn stopped
+while waiting and the answer will start a new turn. Submit then sends the
+answer as a normal message on the asker's own model and agent
+(`serializeFormAnswerAsMarkdown` carries the question's context and the
+answer payload); it never replies to the form, since the request is gone.
+Dismiss closes the card locally. The recovered card keeps its half-filled
+answers in the scoped `formDrafts` store across mounts and failed sends, so
+a rejected send can be retried without losing the answer.
+
 `formCardState.ts` decides what both surfaces show and send, mirroring
 OpenCode's `Form.validateAnswer`: fields are evaluated in declaration order,
 a `when` clause reads only the answers of active earlier fields (an

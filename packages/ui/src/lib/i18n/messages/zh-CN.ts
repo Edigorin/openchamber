@@ -3601,6 +3601,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.formCard.submitFailed': '无法提交答案',
   'chat.formCard.cancelFailed': '无法取消请求',
   'chat.formCard.tryAgain': '请重试。',
+  'chat.formCard.recoveredNotice': '等待期间本轮已停止 — 你的回答将开启新一轮对话。',
   'chat.formDock.progress': '第 {current} / {total}',
   'chat.formDock.waiting': '还有 {count} 个等待中',
   'chat.formDock.back': '上一步',

@@ -372,6 +372,20 @@ type ToolStateError = {
   status: "error"
   input: ToolInput
   error: string
+  /**
+   * OpenCode's structured error `type` (`aborted`, `tool.execution`, ...), so
+   * consumers can tell a turn's death from a deliberate dismissal without
+   * reading the display text; `sync/recoverable-questions.ts` needs the two
+   * apart to decide whether a vanished question may be answered again.
+   */
+  errorType?: string
+  /**
+   * `local` marks a terminal state this client manufactured while finalizing
+   * an interrupted turn (`interruptedTurnToolParts`); an authoritative tool
+   * transition that arrives later supersedes it. Absent means OpenCode
+   * reported the failure.
+   */
+  errorSource?: "local"
   /** Partial text content the tool produced before failing, if any. */
   output?: string
   metadata?: Metadata

@@ -9,6 +9,14 @@ import { readSubagentRun } from "@/lib/opencode/subagent-run"
 import { readDispatchedSessionResult } from "@/lib/opencode/dispatched-session"
 import { Binary } from "./binary"
 import { useSessionUIStore } from "./session-ui-store"
+import { useSelectionStore } from "./selection-store"
+import {
+  markRecoveredQuestionAnswered,
+  noteLocalFormCancelled,
+  noteLocalFormReplied,
+  submitRecoveredAnswer,
+  type RecoveredQuestion,
+} from "./recoverable-questions"
 import { useInputStore } from "./input-store"
 import type { ChildStoreManager } from "./child-store"
 import { computeSubtreeIds } from "./scoped-blocking-requests"
@@ -2393,6 +2401,9 @@ export async function replyToForm(
     // #2448). The later SSE event is a no-op (the reducer only removes when
     // present).
     removeFormRequestFromChildStores(sessionId, formId)
+    // This question was answered; recovery must never re-ask it, even if its
+    // tool call's own disposition is lost in the same gap.
+    noteLocalFormReplied(formId)
   } catch (error) {
     if (isFormRequestNotFoundError(error)) {
       removeFormRequestFromChildStores(sessionId, formId)
@@ -2412,6 +2423,9 @@ export async function cancelForm(sessionId: string, formId: string): Promise<voi
     // A successful cancellation is authoritative; see replyToForm for the
     // lost-SSE-event rationale (issues #2911, #2448).
     removeFormRequestFromChildStores(sessionId, formId)
+    // A deliberate dismissal is not a dead turn: the user closed the question,
+    // so recovery keeps it closed.
+    noteLocalFormCancelled(formId)
   } catch (error) {
     if (isFormRequestNotFoundError(error)) {
       removeFormRequestFromChildStores(sessionId, formId)
@@ -2419,6 +2433,89 @@ export async function cancelForm(sessionId: string, formId: string): Promise<voi
     }
     throw error
   }
+}
+
+/** The model and agent a recovered answer's new turn runs with. */
+type RecoveredAnswerSelection = {
+  providerID: string
+  modelID: string
+  agent?: string
+  variant?: string
+}
+
+/**
+ * The configuration to run a recovered answer with, most specific first: the
+ * model that asked the question (the linked assistant message), then the
+ * session's own record, then the selection this client saved for the session.
+ */
+function recoveredAnswerSelection(question: RecoveredQuestion): RecoveredAnswerSelection {
+  const state = dirStoreForDirectory(question.directory).getState()
+  const message = state.message[question.sessionID]?.find((candidate) => candidate.id === question.toolMessageID)
+  if (message?.role === "assistant") {
+    return {
+      providerID: message.providerID,
+      modelID: message.modelID,
+      agent: message.agent,
+      variant: message.variant,
+    }
+  }
+  const session = state.session.find((candidate) => candidate.id === question.sessionID)
+  if (session?.model) {
+    return {
+      providerID: session.model.providerID,
+      modelID: session.model.id,
+      agent: session.agent,
+      variant: session.model.variant,
+    }
+  }
+  const saved = useSelectionStore.getState().getSessionModelSelection(question.sessionID)
+  if (saved) {
+    return {
+      providerID: saved.providerId,
+      modelID: saved.modelId,
+      agent: useSelectionStore.getState().getSessionAgentSelection(question.sessionID) ?? undefined,
+    }
+  }
+  throw new Error("No model is recorded for this question")
+}
+
+/**
+ * Sends a recovered question's answer as a NEW turn on the session that asked.
+ *
+ * The request itself is gone — OpenCode cancelled the ask with its turn — so
+ * this never replies to the form. The serialized answer goes out as an
+ * ordinary message through the normal send path (optimistic insert, ambiguous
+ * failure confirmation and rollback included) on the asker's own model and
+ * agent. A new turn cannot revive the dead question tool call or a parent's
+ * wait on it; for a subagent's question the turn simply starts in that
+ * subagent's session.
+ *
+ * A rejected send keeps the card and its draft; the submission lock in
+ * `recoverable-questions` returns the first promise for duplicate submits, so
+ * the answer is never sent twice. A completion arriving after a runtime switch
+ * is dropped instead of touching the next runtime's state.
+ */
+export async function sendRecoveredFormAnswer(question: RecoveredQuestion, text: string): Promise<void> {
+  const runtimeKey = getRuntimeKey()
+  await submitRecoveredAnswer(question.form.id, async () => {
+    const selection = recoveredAnswerSelection(question)
+    await useSessionUIStore.getState().sendMessage(
+      text,
+      selection.providerID,
+      selection.modelID,
+      selection.agent,
+      undefined,
+      undefined,
+      undefined,
+      selection.variant,
+      "normal",
+      {
+        userInitiated: true,
+        target: { runtimeKey, sessionId: question.sessionID, directory: question.directory },
+      },
+    )
+    if (runtimeKey === getRuntimeKey()) markRecoveredQuestionAnswered(question.form.id)
+  })
 }
 
 /**

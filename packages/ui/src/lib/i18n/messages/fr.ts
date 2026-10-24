@@ -3599,6 +3599,7 @@ export const dict = {
   'chat.formCard.submitFailed': 'Impossible d’envoyer la réponse',
   'chat.formCard.cancelFailed': 'Impossible d’annuler la demande',
   'chat.formCard.tryAgain': 'Réessayez.',
+  'chat.formCard.recoveredNotice': 'Le tour s\'est arrêté pendant l\'attente — votre réponse lancera un nouveau tour.',
   'chat.formDock.progress': '{current} sur {total}',
   'chat.formDock.waiting': '{count} de plus en attente',
   'chat.formDock.back': 'Retour',

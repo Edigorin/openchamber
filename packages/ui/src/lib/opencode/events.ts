@@ -32,7 +32,7 @@ import {
   type StructuredError,
   type TokenUsageInfo,
 } from "./model"
-import { projectUserParts, structuredErrorText, toolAttachments, toolOutputText } from "./projection"
+import { projectUserParts, structuredErrorText, structuredErrorType, toolAttachments, toolOutputText } from "./projection"
 import { runningShellFromWire, type RunningShell, type ShellEnd } from "./background-shell"
 
 // ---------------------------------------------------------------------------
@@ -77,7 +77,7 @@ export type ToolTransition =
   | { kind: "called"; input: Record<string, JsonValue>; executed: boolean; start: number }
   | { kind: "progress"; metadata: Metadata }
   | { kind: "success"; output: string; attachments?: FilePart[]; metadata?: Metadata; executed: boolean; end: number }
-  | { kind: "failed"; error: string; output?: string; metadata?: Metadata; executed: boolean; end: number }
+  | { kind: "failed"; error: string; errorType?: string; output?: string; metadata?: Metadata; executed: boolean; end: number }
 
 /**
  * What OpenCode rebuilt. v2 watches its own config files and announces the
@@ -135,7 +135,20 @@ export type SyncEvent =
   | { type: "permission.asked"; properties: PermissionRequest }
   | { type: "permission.replied"; properties: { sessionID: string; requestID: string } }
   | { type: "form.created"; properties: { form: FormRequest } }
-  | { type: "form.settled"; properties: { sessionID: string; formID: string } }
+  | {
+    type: "form.settled"
+    properties: {
+      sessionID: string
+      formID: string
+      /**
+       * How OpenCode settled the request. `replied` and `cancelled` collapse
+       * to one event for the reducer, but recovery needs the two apart: a
+       * reply means the question was answered elsewhere, while the turn's own
+       * death cancels its ask and leaves the question worth re-asking.
+       */
+      disposition?: "replied" | "cancelled"
+    }
+  }
   /** A session's shell command started; commands that belong to no session are not reported. */
   | { type: "shell.started"; properties: { shell: RunningShell } }
   /** A shell command exited or was removed. */
@@ -672,6 +685,7 @@ export function translateWireEvent(event: OpenCodeEvent): SyncEvent[] {
           compact({
             kind: "failed",
             error: structuredErrorText(event.data.error),
+            errorType: structuredErrorType(event.data.error),
             output: toolOutputText(event.data.content) || undefined,
             metadata: event.data.metadata,
             executed: event.data.executed,
@@ -786,8 +800,9 @@ export function translateWireEvent(event: OpenCodeEvent): SyncEvent[] {
     case "form.created":
       return [{ type: "form.created", properties: { form: event.data.form } }]
     case "form.replied":
+      return [{ type: "form.settled", properties: { sessionID: event.data.sessionID, formID: event.data.id, disposition: "replied" } }]
     case "form.cancelled":
-      return [{ type: "form.settled", properties: { sessionID: event.data.sessionID, formID: event.data.id } }]
+      return [{ type: "form.settled", properties: { sessionID: event.data.sessionID, formID: event.data.id, disposition: "cancelled" } }]
 
     // --- location-level notices ------------------------------------------------
 

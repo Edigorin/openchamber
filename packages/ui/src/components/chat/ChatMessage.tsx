@@ -26,7 +26,7 @@ import { filterVisibleParts, normalizeParts } from './message/partUtils';
 import { normalizeUserDisplayParts } from './message/normalizeUserDisplayParts';
 import { isHiddenUserMessage } from './message/hiddenUserMessage';
 import { flattenAssistantTextParts, flattenUserTextParts } from '@/lib/messages/messageText';
-import { isLikelyProviderAuthFailure, PROVIDER_AUTH_FAILURE_MESSAGE } from '@/lib/messages/providerAuthError';
+import { resolveAssistantErrorText } from './assistantError';
 import { getProviderModelDisplayName } from '@/lib/modelDisplay';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import type { TurnGroupingContext } from './lib/turns/types';
@@ -42,7 +42,8 @@ import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { getContextObligatoryMessages } from '@/lib/contextObligatoryMessages';
 import { setContextObligatoryMessage } from '@/sync/session-actions';
 import { isVSCodeRuntime } from '@/lib/desktop';
-import { useChatColumnActions } from './chatColumnSession';
+import { useChatColumnActions, useChatSessionSelection } from './chatColumnSession';
+import { useRecoveredQuestionForMessage } from '@/sync/sync-context';
 
 const ToolOutputDialog = lazyWithChunkRecovery(() => import('./message/ToolOutputDialog'));
 
@@ -458,6 +459,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     // Summary body removed — flat rendering means text is always inline.
 
+    const recoveredQuestionForMessage = useRecoveredQuestionForMessage(
+        message.info.id,
+        message.info.sessionID,
+        useChatSessionSelection().directory ?? undefined,
+    );
+
     const assistantError = React.useMemo(() => {
         if (isUser) {
             return undefined;
@@ -477,29 +484,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         const dataMessage = typeof errorInfo.data?.message === 'string' ? errorInfo.data.message : undefined;
         const errorMessage = typeof errorInfo.message === 'string' ? errorInfo.message : undefined;
         const errorName = typeof errorInfo.name === 'string' ? errorInfo.name : undefined;
-        const detail = dataMessage || errorMessage || errorName;
-        if (!detail) {
-            return undefined;
-        }
-        if (errorName === 'SessionRetry') {
-            return {
-                text: `Opencode failed to send a message. Retry attempt info: ${detail}`,
-            };
-        }
-        if (isLikelyProviderAuthFailure(detail)) {
-            return {
-                text: PROVIDER_AUTH_FAILURE_MESSAGE,
-            };
-        }
-        if (detail.trim().toLowerCase() === 'aborted') {
-            return {
-                text: 'The running turn was stopped before OpenCode could send the next message.',
-            };
-        }
-        return {
-            text: `Opencode failed to send message with error: ${detail}`,
-        };
-    }, [isFollowedByAssistant, isUser, message.info]);
+        return resolveAssistantErrorText({
+            isUser: false,
+            isFollowedByAssistant: false,
+            detail: dataMessage || errorMessage || errorName,
+            isSessionRetry: errorName === 'SessionRetry',
+            recoveredQuestion: recoveredQuestionForMessage,
+        });
+    }, [isFollowedByAssistant, isUser, message.info, recoveredQuestionForMessage]);
 
     const assistantErrorText = assistantError?.text;
     // The provider's raw response behind the error, offered as expandable details.

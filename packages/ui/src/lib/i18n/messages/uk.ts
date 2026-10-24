@@ -3601,6 +3601,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.formCard.submitFailed': 'Не вдалося надіслати відповідь',
   'chat.formCard.cancelFailed': 'Не вдалося скасувати запит',
   'chat.formCard.tryAgain': 'Спробуйте ще раз.',
+  'chat.formCard.recoveredNotice': 'Хід зупинився під час очікування — ваша відповідь розпочне новий хід.',
   'chat.formDock.progress': '{current} з {total}',
   'chat.formDock.waiting': 'ще {count} в черзі',
   'chat.formDock.back': 'Назад',

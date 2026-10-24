@@ -45,6 +45,7 @@ import { touchStreamingSession, updateChangedStreamingSessions, updateStreamingS
 import { countSyncPerformance } from "./performance-diagnostics"
 import { runBackgroundNetworkTask } from "@/lib/background-network"
 import { recordDirectoryRecoveryEvent } from "./directory-recovery-snapshots"
+import { applyRecoverableQuestionEvents, deriveRecoveredQuestions, noteQuestionFormSnapshot, useRecoverableQuestionsStore, type RecoveredQuestion } from "./recoverable-questions"
 import { adoptSessionMove, setActionRefs } from "./session-actions"
 import { setSyncRefs, getAllSyncSessions, emitSyncConfigChanged, getDirectoryState } from "./sync-refs"
 import { useSessionUIStore } from "./session-ui-store"
@@ -126,7 +127,7 @@ import { formatMessage, useI18nStore } from "@/lib/i18n"
 import { sessionEvents } from "@/lib/sessionEvents"
 import { fileTreeChanges } from "@/lib/fileTreeChanges"
 import { listGlobalSessionPages, splitGlobalSessionsByArchived, type SessionPageLister } from "@/stores/globalSessions"
-import { areRequestArraysReferentiallyEqual, collectScopedBlockingRequests } from "./scoped-blocking-requests"
+import { areRequestArraysReferentiallyEqual, collectScopedBlockingRequests, computeSubtreeIds } from "./scoped-blocking-requests"
 import { EMPTY_USER_MESSAGE_HISTORY_SNAPSHOT, buildUserMessageHistorySnapshot, type TranscriptPrompt, type UserMessageHistorySnapshot } from "./user-message-history"
 import {
   EMPTY_SESSION_MESSAGE_LOAD_STATE,
@@ -286,6 +287,7 @@ const publishDirectoryEventBatch = (batch: DirectoryEventBatch): void => {
     applyBackgroundShellEvents(directory, events)
     applyGlobalSessionStatusEvents(directory, events)
     applyGlobalBlockingRequestEvents(directory, events)
+    applyRecoverableQuestionEvents(directory, events)
   }
   for (const store of batch.changedStores) {
     const state = batch.states.get(store)
@@ -1367,6 +1369,9 @@ export async function resyncBlockingRequestsForDirectory(
       candidates.map((sessionId) => [sessionId, requestSignature(before.form[sessionId])]),
     )
     const pendingForms = await opencodeClient.listPendingForms({ directories: [directory] })
+    // Capture before deciding anything about absence: a question this client
+    // sees here may later die with its turn and become recoverable.
+    noteQuestionFormSnapshot(directory, pendingForms)
     const grouped: Record<string, FormRequest[]> = {}
     for (const form of pendingForms) {
       if (!form?.id || !form.sessionID) continue
@@ -1957,6 +1962,7 @@ export function handleEvent(
       applyBackgroundShellEvents(directory, [payload])
       applyGlobalSessionStatusEvent(directory, payload)
       if (!heldForAutoAnswer) applyGlobalBlockingRequestEvents(directory, [payload])
+      applyRecoverableQuestionEvents(directory, [payload])
     }
   }
 
@@ -2456,7 +2462,7 @@ export function interruptedTurnToolParts(
 
   let partsChanged = false
   const currentParts = state.part[messageID]
-  const nextParts = currentParts?.map((part) => {
+  const nextParts = currentParts?.map((part): Part => {
     if (part.type !== "tool") return part
     if (part.state.status !== "pending" && part.state.status !== "running") return part
     partsChanged = true
@@ -2465,8 +2471,12 @@ export function interruptedTurnToolParts(
       ...part,
       state: {
         ...part.state,
-        status: "error" as const,
+        status: "error",
         error: "Interrupted",
+        // A local mark, not OpenCode's report: an authoritative transition
+        // that arrives later supersedes it (`event-reducer`), and recovery
+        // reads the provenance to tell a manufactured end from a real one.
+        errorSource: "local",
         time: { start, end: now },
       },
     }
@@ -3663,6 +3673,84 @@ export function useScopedBlockingPermissions(sessionID: string | null, directory
 
 export function useScopedBlockingForms(sessionID: string | null, directory?: string): FormRequest[] {
   return useScopedBlockingRequests(sessionID, directory, selectFormRequestsBySession, EMPTY_FORM_REQUESTS, collectComposerForms)
+}
+
+type RecoveredSnapshot = {
+  state: State
+  recovery: ReturnType<typeof useRecoverableQuestionsStore.getState>
+  scopeRoot: string | null
+  result: RecoveredQuestion[]
+}
+
+const sameRecoveredList = (left: readonly RecoveredQuestion[], right: readonly RecoveredQuestion[]): boolean => {
+  if (left.length !== right.length) return false
+  return left.every((entry, index) => {
+    const other = right[index]
+    return other !== undefined
+      && entry.form.id === other.form.id
+      && entry.toolMessageID === other.toolMessageID
+      && entry.evidence === other.evidence
+  })
+}
+
+// Every message of a chat asks the same question (does my message own a
+// recovered card?), so the derivation is memoized per scope across consumers
+// instead of running per component per store publication.
+const recoveredScopeCache = new Map<string, RecoveredSnapshot>()
+
+function readRecoveredQuestions(store: StoreApi<DirectoryStore>, scopeRoot: string | null, cacheKey: string): RecoveredQuestion[] {
+  const state = store.getState()
+  const recovery = useRecoverableQuestionsStore.getState()
+  const cache = recoveredScopeCache.get(cacheKey)
+  if (cache && cache.state === state && cache.recovery === recovery && cache.scopeRoot === scopeRoot) {
+    return cache.result
+  }
+  const scopeSessionIds = scopeRoot ? computeSubtreeIds(state.session, scopeRoot) : new Set<string>()
+  const derived = deriveRecoveredQuestions(state, recovery, scopeSessionIds)
+  const result = cache && sameRecoveredList(cache.result, derived) ? cache.result : derived
+  if (recoveredScopeCache.size > 16) {
+    const oldest = recoveredScopeCache.keys().next().value
+    if (oldest !== undefined) recoveredScopeCache.delete(oldest)
+  }
+  recoveredScopeCache.set(cacheKey, { state, recovery, scopeRoot, result })
+  return result
+}
+
+/**
+ * The questions whose ask died with their turn, for this session's scope (the
+ * session and its subtree). A recovered question is a local re-ask, not a
+ * pending request: it blocks nothing, and answering it starts a new turn.
+ */
+export function useRecoveredQuestions(sessionID: string | null, directory?: string): RecoveredQuestion[] {
+  const store = useDirectoryStore(directory)
+  const cacheKey = `${directory ?? ""}\u0000${sessionID ?? ""}`
+  const getSnapshot = React.useCallback(
+    () => readRecoveredQuestions(store, sessionID, cacheKey),
+    [cacheKey, store, sessionID],
+  )
+  const subscribe = React.useCallback((notify: () => void) => {
+    const unsubscribeStore = store.subscribe(notify)
+    const unsubscribeRecovery = useRecoverableQuestionsStore.subscribe(notify)
+    return () => {
+      unsubscribeStore()
+      unsubscribeRecovery()
+    }
+  }, [store])
+  return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+}
+
+/**
+ * Whether one assistant message's question is among the recovered questions of
+ * its session scope. The message's phantom "aborted" notice steps aside only
+ * for this precise correlation; every other error on a message still renders.
+ */
+export function useRecoveredQuestionForMessage(
+  messageID: string | undefined,
+  sessionID: string | undefined,
+  directory?: string,
+): boolean {
+  const recovered = useRecoveredQuestions(sessionID ?? null, directory)
+  return messageID !== undefined && recovered.some((entry) => entry.toolMessageID === messageID)
 }
 
 const sessionsByIdCache = new WeakMap<State["session"], Map<string, Session>>()

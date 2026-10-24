@@ -1,3 +1,4 @@
+import type { FormValue } from '@opencode/client';
 import type { FormRequest } from '@/lib/opencode/model';
 
 /**
@@ -56,4 +57,35 @@ export function serializeFormAsMarkdown(form: FormRequest): string {
  */
 export function serializeFormAsJson(form: FormRequest): string {
   return JSON.stringify({ title: form.title, fields: form.fields }, null, 2);
+}
+
+/**
+ * The answer to a question whose ask died with its turn, as the body of the
+ * new turn that replaces it: the question's context so the agent knows what
+ * was asked, the rendered answers, and the `buildFormAnswer` payload itself so
+ * nothing is lost to prose. Numbers and booleans keep their shape, a multiselect
+ * lists every pick including a typed custom answer, and a field hidden by its
+ * `when` clause is absent because the answer carries none.
+ */
+export function serializeFormAnswerAsMarkdown(form: FormRequest, answer: Record<string, FormValue>): string {
+  const lines: string[] = [];
+  const title = form.title.trim();
+  if (title) {
+    lines.push(`# ${title}`, '');
+  }
+  for (const field of form.fields) {
+    const value = answer[field.key];
+    if (value === undefined) continue;
+    lines.push(`## ${field.title?.trim() || field.key}`, '');
+    const description = field.description?.trim();
+    if (description) lines.push(description, '');
+    lines.push(`**Answer:** ${renderAnswerValue(value)}`, '');
+  }
+  lines.push('```json', JSON.stringify(answer), '```');
+  return lines.join('\n').trimEnd();
+}
+
+function renderAnswerValue(value: FormValue): string {
+  if (Array.isArray(value)) return value.join(', ');
+  return String(value);
 }

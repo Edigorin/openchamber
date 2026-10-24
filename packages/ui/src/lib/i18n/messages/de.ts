@@ -3598,6 +3598,7 @@ export const dict = {
   'chat.formCard.submitFailed': 'Die Antwort konnte nicht gesendet werden',
   'chat.formCard.cancelFailed': 'Die Anfrage konnte nicht abgebrochen werden',
   'chat.formCard.tryAgain': 'Versuchen Sie es erneut.',
+  'chat.formCard.recoveredNotice': 'Der Lauf wurde in der Wartezeit beendet — Ihre Antwort startet einen neuen Lauf.',
   'chat.formDock.progress': '{current} von {total}',
   'chat.formDock.waiting': '{count} weitere warten',
   'chat.formDock.back': 'Zurück',

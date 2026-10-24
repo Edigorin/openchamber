@@ -122,6 +122,11 @@ export function structuredErrorText(error: SessionStructuredError): string {
   return error.message || error.type
 }
 
+/** The structured error's `type` (`aborted`, `tool.execution`, ...), kept beside the display text. */
+export function structuredErrorType(error: SessionStructuredError): string {
+  return error.type
+}
+
 /**
  * Converts one wire tool item into a domain tool part. `time.ran` marks the
  * start of execution; before that the call is still being streamed by the
@@ -162,6 +167,7 @@ export function projectToolPart(
         status: "error",
         input: tool.state.input,
         error: structuredErrorText(tool.state.error),
+        errorType: structuredErrorType(tool.state.error),
         output: toolOutputText(tool.state.content) || undefined,
         metadata: tool.state.metadata,
         time: { start, end },

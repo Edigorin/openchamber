@@ -3531,6 +3531,7 @@ export const dict = {
   'chat.formCard.submitFailed': 'تعذّر إرسال الإجابة',
   'chat.formCard.cancelFailed': 'تعذّر إلغاء الطلب',
   'chat.formCard.tryAgain': 'أعد المحاولة.',
+  'chat.formCard.recoveredNotice': 'توقّفت الجولة أثناء الانتظار — سيبدأ ردُّك جولة جديدة.',
   'chat.formDock.progress': '{current} من {total}',
   'chat.formDock.waiting': '{count} أخرى في الانتظار',
   'chat.formDock.back': 'رجوع',
