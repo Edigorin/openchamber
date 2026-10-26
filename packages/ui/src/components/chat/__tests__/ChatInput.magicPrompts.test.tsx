@@ -14,6 +14,8 @@ import type { RuntimeAPIs } from '@/lib/api/types';
 
 const browser = new Window({ url: 'http://localhost/' });
 Object.assign(globalThis, {
+  // CodeMirror's measuring checks `instanceof Window`.
+  Window,
   window: browser,
   document: browser.document,
   navigator: browser.navigator,
@@ -68,8 +70,26 @@ spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
   if (url.pathname.endsWith('/location')) {
     return Response.json({ directory: WORKTREE, project: { id: 'project', directory: WORKTREE, canonical: WORKTREE } });
   }
+  if (url.pathname.endsWith('/session/active')) {
+    // The SDK unwraps the `data` envelope; an empty snapshot is a valid record.
+    return Response.json({ data: {} });
+  }
+  if (url.pathname.endsWith('/vcs')) {
+    return Response.json({ data: { branch: { current: 'main', default: 'main' } } });
+  }
+  if (url.pathname.endsWith('/session-warming')) {
+    return Response.json({ revision: 0, enabled: false, minutes: 0, sessions: [] });
+  }
+  if (url.pathname.endsWith('/config') || url.pathname.endsWith('/project')) {
+    // config.get and project.list return the document list itself, not an envelope.
+    return Response.json([]);
+  }
+  if (url.pathname.endsWith('/shell')) {
+    return Response.json({ location: { directory: WORKTREE }, data: [] });
+  }
   if (url.pathname.endsWith('/session')) return Response.json({ data: [] });
-  return Response.json({});
+  // Every remaining list read (forms, permissions, commands, skills) unwraps `data`.
+  return Response.json({ data: [] });
 });
 
 // Vite-only module forms the composer's import graph reaches, loaded as the keystroke test does.
@@ -109,7 +129,8 @@ const sdk = OpenCode.make({
     }
     const body = path.endsWith('/location')
       ? { directory: WORKTREE, project: { id: 'project', directory: WORKTREE, canonical: WORKTREE } }
-      : path.endsWith('/session/active') ? {}
+      : path.endsWith('/session/active') ? { data: {} }
+      : path.endsWith('/vcs') ? { data: { branch: { current: 'main', default: 'main' } } }
       : { data: [] };
     return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
   },
